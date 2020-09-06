@@ -17,6 +17,9 @@ func CLI(args []string, stdout, stderr io.Writer) int {
 	case "links":
 		return cmdLinks(rest, stdout, stderr)
 
+	case "unlinked":
+		return cmdUnlinked(rest, stdout, stderr)
+
 	default:
 		fmt.Fprintf(stderr, "ERROR: Unknown command: %s\n", cmd)
 		return 2

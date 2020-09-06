@@ -12,8 +12,8 @@ import (
 	_ "github.com/mattn/go-sqlite3"
 )
 
-func cmdLinks(args []string, stdout, stderr io.Writer) int {
-	var app linksApp
+func cmdUnlinked(args []string, stdout, stderr io.Writer) int {
+	var app unlinkedApp
 	if err := app.fromArgs(args, stdout, stderr); err != nil {
 		return 2
 	}
@@ -26,14 +26,15 @@ func cmdLinks(args []string, stdout, stderr io.Writer) int {
 	return 0
 }
 
-type linksApp struct {
+type unlinkedApp struct {
 	dbpath string
 
 	logger *log.Logger
+	stdout io.Writer
 }
 
-func (app *linksApp) fromArgs(args []string, stdout, stderr io.Writer) error {
-	flags := flag.NewFlagSet("links", flag.ContinueOnError)
+func (app *unlinkedApp) fromArgs(args []string, stdout, stderr io.Writer) error {
+	flags := flag.NewFlagSet("unlinked", flag.ContinueOnError)
 	flags.SetOutput(stderr)
 
 	flags.StringVar(
@@ -45,6 +46,7 @@ func (app *linksApp) fromArgs(args []string, stdout, stderr io.Writer) error {
 	}
 
 	app.logger = log.New(stderr, "", log.LstdFlags)
+	app.stdout = stdout
 
 	if app.dbpath == "" {
 		u, err := user.Current()
@@ -57,7 +59,7 @@ func (app *linksApp) fromArgs(args []string, stdout, stderr io.Writer) error {
 	return nil
 }
 
-func (app *linksApp) run() error {
+func (app *unlinkedApp) run() error {
 	db, err := sqlx.Open("sqlite3", app.dbpath)
 	if err != nil {
 		return err
@@ -79,19 +81,15 @@ func (app *linksApp) run() error {
 		return err
 	}
 
-	nmap := make(map[int]Note)
-	for _, n := range notes {
-		nmap[n.PK] = n
+	// List the leaf notes: those that are not linked by anything else.
+	found := make([]bool, maxPK(notes)+1)
+	for _, link := range links {
+		found[link.Note] = true
 	}
 
-	for _, link := range links {
-		a := nmap[link.ByNote]
-		b := nmap[link.Note]
-
-		if b.Trashed {
-			app.logger.Printf("[%d]%s -> [%d]%s [trash]", a.PK, a.Title.String, b.PK, b.Title.String)
-		} else {
-			app.logger.Printf("[%d]%s -> [%d]%s", a.PK, a.Title.String, b.PK, b.Title.String)
+	for _, note := range notes {
+		if !found[note.PK] {
+			fmt.Fprintln(app.stdout, note.TitleFlags())
 		}
 	}
 
